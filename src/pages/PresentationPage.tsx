@@ -343,24 +343,22 @@ export const PresentationPage: React.FC = () => {
             </div>
           </div>
 
-          <div className="p-6 rounded-2xl bg-gradient-to-br from-slate-950 via-slate-900 to-cyan-950/40 border border-cyan-500/30 text-center space-y-4">
-            <div className="w-16 h-16 rounded-full bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center text-cyan-400 mx-auto">
-              <MapPin className="w-8 h-8 animate-bounce" />
+          <div className="p-3 rounded-2xl bg-slate-900 border border-cyan-500/30 text-center space-y-3 overflow-hidden">
+            <img 
+              src="./screenshots/regional-map.jpg" 
+              alt="Regional Supply Map Interface" 
+              className="w-full h-44 object-cover rounded-xl border border-slate-800 shadow-md"
+            />
+            <div className="flex items-center justify-between pt-1 px-2">
+              <span className="text-xs text-slate-300 font-semibold">Interactive Geospatial GIS Map</span>
+              <button 
+                onClick={() => setActivePage('map')}
+                className="px-4 py-1.5 rounded-lg bg-cyan-500 text-slate-950 font-extrabold text-xs hover:bg-cyan-400 transition-all inline-flex items-center gap-1.5 shadow-md shadow-cyan-500/20"
+              >
+                <span>Launch Live Map</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
             </div>
-            <div>
-              <h4 className="text-base font-bold text-slate-100">Interactive Map Component Ready</h4>
-              <p className="text-xs text-slate-400 max-w-sm mx-auto mt-1">
-                Explore real facility markers, popup stock telemetry, and donor transit lines.
-              </p>
-            </div>
-
-            <button 
-              onClick={() => setActivePage('map')}
-              className="px-5 py-2.5 rounded-xl bg-cyan-500 text-slate-950 font-extrabold text-xs hover:bg-cyan-400 transition-all inline-flex items-center gap-2 shadow-lg shadow-cyan-500/20"
-            >
-              <span>Launch Regional Map</span>
-              <ArrowRight className="w-4 h-4" />
-            </button>
           </div>
         </div>
       )

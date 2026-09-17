@@ -38,6 +38,27 @@ In regional healthcare systems, **medicine stockouts cost lives**. Rural clinics
 
 ---
 
+## 📸 Interface Showcase
+
+<div align="center">
+
+### 📊 Command Operations Dashboard
+![Command Operations Dashboard](public/screenshots/dashboard.jpg)
+
+<br/>
+
+### 🗺️ Regional Geospatial Supply Map
+![Regional Supply Map](public/screenshots/regional-map.jpg)
+
+<br/>
+
+### 🤖 Predictive Analytics & AI Redistribution Engine
+![Predictive Analytics Engine](public/screenshots/predictive-analytics.jpg)
+
+</div>
+
+---
+
 ## 🔥 Key Features
 
 ### 📊 1. Command Operations Dashboard
