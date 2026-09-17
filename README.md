@@ -11,7 +11,7 @@
 
 **An AI-driven, real-time regional medical inventory intelligence system designed to predict medicine shortages, optimize multi-facility redistribution, and prevent critical stockouts.**
 
-[🚀 Explore Live Demo Deck](https://shrex88.github.io/MedFlow) • [📖 Documentation](#-system-architecture) • [🧪 Crisis Simulator](#-epidemic--crisis-simulation-center)
+[🚀 Explore Live Demo Deck](https://shrex88.github.io/MedFlow) • [📽️ Open Slide Deck (PRESENTATION.md)](PRESENTATION.md) • [📖 Documentation](#-system-architecture) • [🧪 Crisis Simulator](#-epidemic--crisis-simulation-center)
 
 </div>
 
