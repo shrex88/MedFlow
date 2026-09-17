@@ -11,6 +11,7 @@ import { AIRecommendationsPage } from './pages/AIRecommendationsPage';
 import { SimulationCenterPage } from './pages/SimulationCenterPage';
 import { AlertsPage } from './pages/AlertsPage';
 import { SettingsPage } from './pages/SettingsPage';
+import { PresentationPage } from './pages/PresentationPage';
 import { ActivePage } from './types/medflow';
 import { 
   LayoutDashboard, 
@@ -18,7 +19,8 @@ import {
   Building2, 
   Pill, 
   Sparkles, 
-  Sliders 
+  Sliders,
+  Presentation
 } from 'lucide-react';
 
 const MainContent: React.FC = () => {
@@ -37,6 +39,7 @@ const MainContent: React.FC = () => {
       case 'simulation': return <SimulationCenterPage />;
       case 'alerts': return <AlertsPage />;
       case 'settings': return <SettingsPage />;
+      case 'presentation': return <PresentationPage />;
       default: return <DashboardView />;
     }
   };

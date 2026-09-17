@@ -8,12 +8,13 @@ import {
   RefreshCw, 
   Play, 
   Sparkles,
-  ChevronDown
+  ChevronDown,
+  Presentation
 } from 'lucide-react';
 import { useMedFlow } from '../../context/MedFlowContext';
 
 export const Header: React.FC = () => {
-  const { alerts, startLiveScenario, resetSystem, isScenarioRunning, activeScenarioStep } = useMedFlow();
+  const { alerts, startLiveScenario, resetSystem, isScenarioRunning, activeScenarioStep, setActivePage } = useMedFlow();
   const [timeStr, setTimeStr] = useState<string>('');
   const [dateStr, setDateStr] = useState<string>('');
   const [showAlertDropdown, setShowAlertDropdown] = useState<boolean>(false);
@@ -84,6 +85,15 @@ export const Header: React.FC = () => {
               <span>Run Prebuilt Demo Scenario</span>
             </>
           )}
+        </button>
+
+        {/* Project Presentation Pitch Deck Button */}
+        <button
+          onClick={() => setActivePage('presentation')}
+          className="flex items-center gap-2 px-3.5 py-1.5 rounded-lg bg-slate-900 border border-cyan-500/40 hover:bg-cyan-950/50 text-cyan-300 text-xs font-semibold shadow-sm transition-all"
+        >
+          <Presentation className="w-3.5 h-3.5 text-cyan-400" />
+          <span>Project Presentation</span>
         </button>
       </div>
 

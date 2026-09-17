@@ -99,4 +99,5 @@ export type ActivePage =
   | 'recommendations'
   | 'simulation'
   | 'alerts'
-  | 'settings';
+  | 'settings'
+  | 'presentation';

@@ -9,7 +9,8 @@ import {
   Sliders, 
   Bell, 
   Settings,
-  ArrowRightLeft
+  ArrowRightLeft,
+  Presentation
 } from 'lucide-react';
 import { useMedFlow } from '../../context/MedFlowContext';
 import { ActivePage } from '../../types/medflow';
@@ -46,6 +47,7 @@ export const Sidebar: React.FC = () => {
       icon: Bell,
       badge: unreadAlertsCount > 0 ? unreadAlertsCount : undefined 
     },
+    { id: 'presentation', label: 'Project Presentation', icon: Presentation, badge: 'Deck' },
     { id: 'settings', label: 'Settings', icon: Settings },
   ];
 
@@ -78,6 +80,8 @@ export const Sidebar: React.FC = () => {
                 <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold font-mono ${
                   item.id === 'recommendations' 
                     ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 animate-pulse'
+                    : item.id === 'presentation'
+                    ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40'
                     : 'bg-rose-500/20 text-rose-300 border border-rose-500/40'
                 }`}>
                   {item.badge}
