@@ -51,15 +51,33 @@
 }
 
 /* Leaflet map dark theme overrides */
-.leaflet-container {
+.leaflet-container,
+.leaflet-tile,
+.leaflet-tile-pane,
+.leaflet-tile-container,
+.leaflet-layer,
+.leaflet-map-pane,
+.leaflet-pane {
   background: #090d16 !important;
+  background-color: #090d16 !important;
   font-family: 'Plus Jakarta Sans', sans-serif !important;
+}
+
+.leaflet-container {
   border-radius: 0.75rem;
 }
 
 .leaflet-tile {
   filter: brightness(0.6) invert(1) contrast(3) hue-rotate(200deg) saturate(0.3) !important;
 }
+
+.leaflet-tile-container img,
+img.leaflet-tile {
+  background: #090d16 !important;
+  background-color: #090d16 !important;
+  border: none !important;
+}
+
 
 .leaflet-control-zoom {
   border: 1px solid rgba(255, 255, 255, 0.1) !important;

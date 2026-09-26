@@ -345,8 +345,9 @@ export const PresentationPage: React.FC = () => {
 
           <div className="p-3 rounded-2xl bg-slate-900 border border-cyan-500/30 text-center space-y-3 overflow-hidden">
             <img 
-              src="./screenshots/regional-map.jpg" 
+              src={`${import.meta.env.BASE_URL}screenshots/regional-map.jpg`} 
               alt="Regional Supply Map Interface" 
+              onError={(e) => { (e.currentTarget as HTMLElement).style.display = 'none'; }}
               className="w-full h-44 object-cover rounded-xl border border-slate-800 shadow-md"
             />
             <div className="flex items-center justify-between pt-1 px-2">
