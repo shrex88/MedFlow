@@ -20,6 +20,8 @@ import { useUserLocation } from '../../hooks/useUserLocation';
 import { getNearbyHospitals } from '../../services/nearbyHospitalsService';
 import { NearbyHospital, UserLocation } from '../../types/nearbyHospital';
 import { useMedFlow } from '../../context/MedFlowContext';
+import { evaluateHospitalResourceSearch } from '../../services/resourceSearchService';
+import { HospitalResourceItem } from '../../types/hospitalResource';
 
 interface FindHospitalsPanelProps {
   onHospitalsLoaded?: (hospitals: NearbyHospital[]) => void;
@@ -35,7 +37,10 @@ interface FindHospitalsPanelProps {
   onToggleLiveTracking?: () => void;
   movementThreshold?: number;
   onMovementThresholdChange?: (threshold: number) => void;
+  searchQuery?: string;
+  onSearchQueryChange?: (query: string) => void;
 }
+
 
 export const FindHospitalsPanel: React.FC<FindHospitalsPanelProps> = ({
   onHospitalsLoaded,
@@ -51,6 +56,8 @@ export const FindHospitalsPanel: React.FC<FindHospitalsPanelProps> = ({
   onToggleLiveTracking,
   movementThreshold: externalThreshold = 250,
   onMovementThresholdChange,
+  searchQuery = '',
+  onSearchQueryChange,
 }) => {
   const hookLocation = useUserLocation(externalThreshold);
 
@@ -68,7 +75,8 @@ export const FindHospitalsPanel: React.FC<FindHospitalsPanelProps> = ({
   const [movementThreshold, setMovementThreshold] = useState<number>(externalThreshold);
   const [nearbyHospitals, setNearbyHospitals] = useState<NearbyHospital[]>([]);
   const [isSearching, setIsSearching] = useState<boolean>(false);
-  const [filterType, setFilterType] = useState<string>('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'AVAILABLE' | 'LIMITED' | 'NOT_AVAILABLE' | 'UNKNOWN'>('all');
+  const [expandedHospitalId, setExpandedHospitalId] = useState<string | null>(null);
 
   const cardRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
@@ -125,14 +133,19 @@ export const FindHospitalsPanel: React.FC<FindHospitalsPanelProps> = ({
         behavior: 'smooth',
         block: 'nearest',
       });
+      setExpandedHospitalId(selectedHospitalId);
     }
   }, [selectedHospitalId]);
 
-  const filteredHospitals = nearbyHospitals.filter(h => {
-    if (filterType === 'hospital') return h.type.toLowerCase().includes('hospital');
-    if (filterType === 'clinic') return h.type.toLowerCase().includes('clinic');
-    if (filterType === 'emergency') return h.type.toLowerCase().includes('emergency');
-    return true;
+  // Evaluate each hospital against search query
+  const evaluatedHospitals = nearbyHospitals.map(hosp => ({
+    hospital: hosp,
+    resourceSearch: evaluateHospitalResourceSearch(hosp.id, hosp.name, searchQuery),
+  }));
+
+  const filteredEvaluatedHospitals = evaluatedHospitals.filter(item => {
+    if (statusFilter === 'all') return true;
+    return item.resourceSearch.overallStatus === statusFilter;
   });
 
   return (
@@ -265,20 +278,30 @@ export const FindHospitalsPanel: React.FC<FindHospitalsPanelProps> = ({
               </div>
             </div>
 
-            {/* Movement Threshold Settings */}
-            <div className="flex items-center justify-between text-[11px] pt-1 border-t border-slate-800/60 font-mono text-slate-400">
-              <span className="flex items-center gap-1">
-                <Sliders className="w-3 h-3 text-purple-400" /> Re-search Threshold:
-              </span>
-              <select
-                value={movementThreshold}
-                onChange={e => handleThresholdSelect(Number(e.target.value))}
-                className="bg-slate-900 border border-slate-700 text-purple-300 rounded px-1.5 py-0.5 text-[10px] focus:outline-none"
-              >
-                <option value={100}>100 meters</option>
-                <option value={250}>250 meters</option>
-                <option value={500}>500 meters</option>
-              </select>
+            {/* Search Availability Filter Tabs */}
+            <div className="space-y-1.5 pt-2 border-t border-slate-800 text-xs font-mono">
+              <span className="text-slate-400 text-[10px]">Filter by Search Status:</span>
+              <div className="grid grid-cols-5 gap-1 text-[10px]">
+                {[
+                  { id: 'all', label: 'All' },
+                  { id: 'AVAILABLE', label: '🟢 Avail' },
+                  { id: 'LIMITED', label: '🟡 Limit' },
+                  { id: 'NOT_AVAILABLE', label: '🔴 Unavail' },
+                  { id: 'UNKNOWN', label: '⚪ Unk' },
+                ].map(tab => (
+                  <button
+                    key={tab.id}
+                    onClick={() => setStatusFilter(tab.id as any)}
+                    className={`py-1 px-1 rounded-lg text-center font-bold transition-all truncate ${
+                      statusFilter === tab.id
+                        ? 'bg-cyan-600 text-white shadow'
+                        : 'bg-slate-900 text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
         )}
@@ -290,7 +313,7 @@ export const FindHospitalsPanel: React.FC<FindHospitalsPanelProps> = ({
           <div className="flex items-center justify-between border-b border-slate-800 pb-2">
             <h3 className="font-extrabold text-white text-xs uppercase tracking-wider flex items-center gap-1.5 font-mono">
               <Building2 className="w-4 h-4 text-emerald-400" />
-              Nearby Facilities ({filteredHospitals.length})
+              Nearby Facilities ({filteredEvaluatedHospitals.length})
             </h3>
             {isSearching && (
               <span className="text-[10px] text-cyan-400 font-mono animate-pulse flex items-center gap-1">
@@ -299,11 +322,11 @@ export const FindHospitalsPanel: React.FC<FindHospitalsPanelProps> = ({
             )}
           </div>
 
-          <div className="space-y-2.5 max-h-[420px] overflow-y-auto pr-1">
-            {filteredHospitals.length === 0 ? (
+          <div className="space-y-3 max-h-[500px] overflow-y-auto pr-1">
+            {filteredEvaluatedHospitals.length === 0 ? (
               <div className="text-center py-6 text-slate-400 text-xs space-y-2">
                 <Building2 className="w-8 h-8 text-slate-600 mx-auto" />
-                <p>No hospitals were found within {searchRadius} km of your current location.</p>
+                <p>No hospitals match your filter within {searchRadius} km.</p>
                 <button
                   onClick={() => handleRadiusSelect(searchRadius === 5 ? 10 : searchRadius === 10 ? 20 : 50)}
                   className="px-3 py-1.5 rounded-lg bg-cyan-950 border border-cyan-700 text-cyan-300 font-bold text-xs hover:bg-cyan-900 transition-all shadow"
@@ -312,60 +335,107 @@ export const FindHospitalsPanel: React.FC<FindHospitalsPanelProps> = ({
                 </button>
               </div>
             ) : (
-              filteredHospitals.map(hosp => {
+              filteredEvaluatedHospitals.map(({ hospital: hosp, resourceSearch: searchRes }) => {
                 const isSelected = selectedHospitalId === hosp.id;
+                const isExpanded = expandedHospitalId === hosp.id || isSelected;
+
                 return (
                   <div
                     key={hosp.id}
                     ref={el => (cardRefs.current[hosp.id] = el)}
-                    onClick={() => onHospitalSelect?.(hosp)}
-                    className={`p-3 rounded-xl border transition-all cursor-pointer space-y-2 ${
+                    onClick={() => {
+                      onHospitalSelect?.(hosp);
+                      setExpandedHospitalId(prev => prev === hosp.id ? null : hosp.id);
+                    }}
+                    className={`p-3 rounded-xl border transition-all cursor-pointer space-y-2.5 ${
                       isSelected
                         ? 'bg-slate-900 border-cyan-500 shadow-lg shadow-cyan-950/60 ring-1 ring-cyan-400/50'
                         : 'bg-slate-950/80 border-slate-800 hover:border-slate-700 hover:bg-slate-900/60'
                     }`}
                   >
+                    {/* Header line */}
                     <div className="flex items-start justify-between gap-2">
                       <div>
                         <h4 className="font-bold text-xs text-white flex items-center gap-1">
-                          {hosp.type === 'Emergency Hospital' ? '🚨 ' : '🏥 '}
-                          {hosp.name}
+                          🏥 {hosp.name}
                         </h4>
                         <p className="text-[11px] text-slate-400 flex items-center gap-1 mt-0.5">
                           <MapPin className="w-3 h-3 text-slate-500 shrink-0" />
-                          <span className="truncate max-w-[180px]">{hosp.address}</span>
+                          <span className="truncate max-w-[170px]">{hosp.address}</span>
                         </p>
                       </div>
 
-                      <div className="text-right shrink-0">
+                      <div className="text-right shrink-0 space-y-1">
                         <span className="px-2 py-0.5 rounded-full text-[10px] font-bold font-mono bg-emerald-950 text-emerald-300 border border-emerald-700 block">
                           📍 {hosp.distanceFormatted}
                         </span>
-                        <span className="text-[9px] text-slate-500 font-mono mt-0.5 block">
-                          {hosp.source}
+                        <span
+                          className={`px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase font-mono block border ${
+                            searchRes.overallStatus === 'AVAILABLE'
+                              ? 'bg-emerald-950 text-emerald-300 border-emerald-700'
+                              : searchRes.overallStatus === 'LIMITED'
+                              ? 'bg-amber-950 text-amber-300 border-amber-700'
+                              : searchRes.overallStatus === 'NOT_AVAILABLE'
+                              ? 'bg-rose-950 text-rose-300 border-rose-700'
+                              : 'bg-slate-900 text-slate-400 border-slate-700'
+                          }`}
+                        >
+                          {searchRes.overallStatus === 'AVAILABLE' ? '🟢 Available' :
+                           searchRes.overallStatus === 'LIMITED' ? '🟡 Limited' :
+                           searchRes.overallStatus === 'NOT_AVAILABLE' ? '🔴 Unavailable' : '⚪ Unknown'}
                         </span>
                       </div>
                     </div>
 
-                    <div className="flex items-center justify-between text-[11px] pt-1.5 border-t border-slate-800/80 text-slate-300 font-mono">
-                      <div className="flex items-center gap-2">
-                        {hosp.rating && (
-                          <span className="flex items-center gap-0.5 text-amber-400 font-semibold">
-                            <Star className="w-3 h-3 fill-amber-400" /> {hosp.rating.toFixed(1)}
-                          </span>
-                        )}
-                        {hosp.isOpenNow !== undefined && (
-                          <span className={hosp.isOpenNow ? 'text-emerald-400 font-semibold' : 'text-rose-400'}>
-                            {hosp.isOpenNow ? '🟢 Open' : '🔴 Closed'}
-                          </span>
-                        )}
-                        {hosp.phoneNumber && (
-                          <span className="text-cyan-400 flex items-center gap-0.5">
-                            <Phone className="w-3 h-3" /> Call
-                          </span>
-                        )}
-                      </div>
+                    {/* 🔴 MANDATORY SECTION: Currently Unavailable Resources */}
+                    <div className="p-2 rounded-lg bg-rose-950/40 border border-rose-900/80 space-y-1">
+                      <h5 className="text-[10px] font-bold text-rose-300 uppercase font-mono flex items-center justify-between">
+                        <span>🔴 Currently Unavailable</span>
+                        <span className="text-rose-400 font-semibold">{searchRes.unavailableResources.length} items</span>
+                      </h5>
+                      {searchRes.unavailableResources.length === 0 ? (
+                        <p className="text-[10px] text-slate-400 font-mono">No stockouts reported for query</p>
+                      ) : (
+                        <div className="space-y-0.5 text-[10px] font-mono text-rose-200">
+                          {searchRes.unavailableResources.slice(0, 3).map((res: HospitalResourceItem) => (
+                            <div key={res.id} className="flex justify-between">
+                              <span>❌ {res.name}</span>
+                              <span className="font-bold">0/{res.total} {res.unit || ''}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
 
+                    {/* 🟢 Currently Available Preview */}
+                    <div className="p-2 rounded-lg bg-emerald-950/30 border border-emerald-900/60 space-y-1 text-[10px] font-mono">
+                      <h5 className="font-bold text-emerald-300 uppercase flex items-center justify-between">
+                        <span>🟢 Currently Available</span>
+                        <span className="text-emerald-400">{searchRes.availableResources.length} items</span>
+                      </h5>
+                      <div className="space-y-0.5 text-emerald-200">
+                        {searchRes.availableResources.slice(0, 3).map((res: HospitalResourceItem) => (
+                          <div key={res.id} className="flex justify-between">
+                            <span>✓ {res.name}</span>
+                            <span className="font-bold text-emerald-400">{res.available}/{res.total} {res.unit || ''}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+
+                    {/* Data Freshness Metrics */}
+                    <div className={`p-1.5 rounded text-[10px] font-mono flex items-center justify-between border ${
+                      searchRes.isOutdated 
+                        ? 'bg-amber-950/40 border-amber-800 text-amber-300' 
+                        : 'bg-slate-900 border-slate-800 text-slate-400'
+                    }`}>
+                      <span>{searchRes.isOutdated ? '⚠️ Data may be outdated' : '🟢 Verified Live Data'}</span>
+                      <span className="font-bold">{searchRes.timeAgoFormatted}</span>
+                    </div>
+
+                    {/* Directions link */}
+                    <div className="flex items-center justify-end pt-1 border-t border-slate-800/80">
                       <a
                         href={hosp.googleMapsUrl}
                         target="_blank"
@@ -387,4 +457,5 @@ export const FindHospitalsPanel: React.FC<FindHospitalsPanelProps> = ({
     </div>
   );
 };
+
 

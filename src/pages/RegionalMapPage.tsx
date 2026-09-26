@@ -27,6 +27,7 @@ export const RegionalMapPage: React.FC = () => {
   const [movementThreshold, setMovementThreshold] = useState<number>(250);
   const [nearbyHospitals, setNearbyHospitals] = useState<NearbyHospital[]>([]);
   const [selectedHospitalId, setSelectedHospitalId] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState<string>('');
 
   const {
     userLocation,
@@ -121,6 +122,8 @@ export const RegionalMapPage: React.FC = () => {
             onRequestLocation={requestLocation}
             onToggleLiveTracking={handleToggleLiveTracking}
             locationError={error}
+            searchQuery={searchQuery}
+            onSearchQueryChange={setSearchQuery}
           />
         </div>
 
@@ -166,6 +169,8 @@ export const RegionalMapPage: React.FC = () => {
               onRadiusChange={handleRadiusChange}
               movementThreshold={movementThreshold}
               onMovementThresholdChange={handleThresholdChange}
+              searchQuery={searchQuery}
+              onSearchQueryChange={setSearchQuery}
               onHospitalsLoaded={hospitals => {
                 setNearbyHospitals(hospitals);
               }}
@@ -275,4 +280,5 @@ export const RegionalMapPage: React.FC = () => {
     </div>
   );
 };
+
 
