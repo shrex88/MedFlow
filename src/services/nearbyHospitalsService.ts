@@ -136,13 +136,13 @@ async function fetchFromOverpassAPI(
 
     return results;
   } catch (error) {
-    console.warn('Overpass API fetch failed, using fallback:', error);
+    console.warn('Overpass API fetch failed:', error);
     return [];
   }
 }
 
 /**
- * Fetch nearby hospitals using Google Places API (if client API key or server proxy is provided)
+ * Fetch nearby hospitals using current Google Places API (New) with FieldMask & Circular Restriction
  */
 async function fetchFromGooglePlaces(
   lat: number,
@@ -153,19 +153,83 @@ async function fetchFromGooglePlaces(
 
   if (apiKey) {
     try {
-      const url = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${lat},${lng}&radius=${radiusMeters}&type=hospital&key=${apiKey}`;
-      const res = await fetch(url);
+      // Google Places API (New) Nearby Search endpoint
+      const newApiUrl = 'https://places.googleapis.com/v1/places:searchNearby';
+      const response = await fetch(newApiUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Goog-Api-Key': apiKey,
+          // FieldMask specifying only fields required by MedFlow AI to optimize cost and bandwidth
+          'X-Goog-FieldMask': 'places.id,places.displayName,places.formattedAddress,places.location,places.rating,places.userRatingCount,places.regularOpeningHours,places.nationalPhoneNumber,places.primaryType',
+        },
+        body: JSON.stringify({
+          includedTypes: ['hospital', 'medical_clinic', 'doctor'],
+          maxResultCount: 20,
+          locationRestriction: {
+            circle: {
+              center: {
+                latitude: lat,
+                longitude: lng,
+              },
+              radius: radiusMeters,
+            },
+          },
+          rankPreference: 'DISTANCE',
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.places && Array.isArray(data.places)) {
+          return data.places.map((place: any) => {
+            const placeLat = place.location?.latitude || lat;
+            const placeLng = place.location?.longitude || lng;
+            const dist = calculateHaversineDistance(lat, lng, placeLat, placeLng);
+            
+            const isClinic = place.primaryType?.includes('clinic') || place.primaryType?.includes('doctor');
+            const placeName = place.displayName?.text || 'Healthcare Facility';
+
+            return {
+              id: `gplace-v1-${place.id}`,
+              name: placeName,
+              type: isClinic ? 'Clinic' : 'Hospital',
+              address: place.formattedAddress || `Coordinates: ${placeLat.toFixed(4)}, ${placeLng.toFixed(4)}`,
+              lat: placeLat,
+              lng: placeLng,
+              distanceMeters: dist,
+              distanceFormatted: formatDistance(dist),
+              rating: place.rating,
+              userRatingsTotal: place.userRatingCount,
+              isOpenNow: place.regularOpeningHours?.openNow,
+              phoneNumber: place.nationalPhoneNumber,
+              googleMapsUrl: getGoogleMapsDirectionsUrl(placeLat, placeLng, placeName, { latitude: lat, longitude: lng, accuracy: 0, timestamp: Date.now() }),
+              source: 'Google Places',
+            };
+          });
+        }
+      }
+    } catch (e) {
+      console.warn('Google Places API (New) fetch error, trying legacy fallback:', e);
+    }
+  }
+
+  // Backend server proxy fallback
+  try {
+    const serverUrl = `http://localhost:5001/api/nearby-hospitals?lat=${lat}&lng=${lng}&radius=${radiusMeters}`;
+    const res = await fetch(serverUrl);
+    if (res.ok) {
       const data = await res.json();
-      if (data.results) {
-        return data.results.map((place: any) => {
-          const placeLat = place.geometry.location.lat;
-          const placeLng = place.geometry.location.lng;
+      if (Array.isArray(data) && data.length > 0) {
+        return data.map((place: any) => {
+          const placeLat = place.geometry?.location?.lat || place.lat;
+          const placeLng = place.geometry?.location?.lng || place.lng;
           const dist = calculateHaversineDistance(lat, lng, placeLat, placeLng);
           return {
-            id: `gplace-${place.place_id}`,
+            id: `server-${place.place_id || place.id}`,
             name: place.name,
-            type: (place.types?.includes('hospital') ? 'Hospital' : 'Medical Center') as NearbyHospital['type'],
-            address: place.vicinity || place.formatted_address || 'Address available on map',
+            type: 'Hospital',
+            address: place.vicinity || place.formatted_address || place.address || 'Address on map',
             lat: placeLat,
             lng: placeLng,
             distanceMeters: dist,
@@ -174,27 +238,13 @@ async function fetchFromGooglePlaces(
             userRatingsTotal: place.user_ratings_total,
             isOpenNow: place.opening_hours?.open_now,
             googleMapsUrl: getGoogleMapsDirectionsUrl(placeLat, placeLng, place.name, { latitude: lat, longitude: lng, accuracy: 0, timestamp: Date.now() }),
-            source: 'Google Places'
+            source: 'Google Places',
           };
         });
       }
-    } catch (e) {
-      console.warn('Direct Google Places API error:', e);
-    }
-  }
-
-  // Try Express backend endpoint proxy if running locally
-  try {
-    const serverUrl = `http://localhost:5001/api/nearby-hospitals?lat=${lat}&lng=${lng}&radius=${radiusMeters}`;
-    const res = await fetch(serverUrl);
-    if (res.ok) {
-      const data = await res.json();
-      if (Array.isArray(data) && data.length > 0) {
-        return data;
-      }
     }
   } catch (e) {
-    // Backend server unavailable or no server key
+    // Backend server unavailable
   }
 
   return [];
@@ -211,7 +261,7 @@ export async function getNearbyHospitals(
 ): Promise<NearbyHospital[]> {
   const radiusMeters = radiusKm * 1000;
 
-  // 1. Try Google Places (if API key / server is active)
+  // 1. Try Google Places (New API or Proxy)
   let googleResults = await fetchFromGooglePlaces(userLat, userLng, radiusMeters);
 
   // 2. Fetch live data from OpenStreetMap Overpass API
@@ -240,7 +290,6 @@ export async function getNearbyHospitals(
   // Combine results with deduplication by name & proximity
   const allResultsMap = new Map<string, NearbyHospital>();
 
-  // Helper to add results with deduplication
   const addResult = (hosp: NearbyHospital) => {
     const normalizedKey = hosp.name.toLowerCase().replace(/[^a-z0-9]/g, '');
     if (!allResultsMap.has(normalizedKey)) {
@@ -252,7 +301,7 @@ export async function getNearbyHospitals(
   osmResults.forEach(addResult);
   regionalResults.forEach(addResult);
 
-  // If no external results found (e.g., offline or network restricted), compute distances to all regional facilities regardless of radius so user always sees hospitals
+  // Fallback if no facilities in exact radius: include nearest regional facilities recalculated from userLat, userLng
   if (allResultsMap.size === 0 && existingRegionalFacilities.length > 0) {
     existingRegionalFacilities.forEach(fac => {
       const dist = calculateHaversineDistance(userLat, userLng, fac.lat, fac.lng);
@@ -278,3 +327,4 @@ export async function getNearbyHospitals(
 
   return sortedList;
 }
+

@@ -14,7 +14,11 @@ import {
   ShieldAlert,
   Compass,
   MapPin,
-  Layers
+  Layers,
+  Navigation,
+  Crosshair,
+  Radio,
+  RefreshCw
 } from 'lucide-react';
 import { useMedFlow } from '../../context/MedFlowContext';
 import { Facility, TransferRecommendation } from '../../types/medflow';
@@ -54,74 +58,210 @@ interface MapProps {
   nearbyHospitals?: NearbyHospital[];
   selectedHospitalId?: string | null;
   onHospitalSelect?: (hospital: NearbyHospital) => void;
+  isLocating?: boolean;
+  isSearching?: boolean;
+  isLiveTracking?: boolean;
+  searchRadius?: number;
+  onRadiusChange?: (radius: number) => void;
+  onRequestLocation?: () => void;
+  onToggleLiveTracking?: () => void;
+  locationError?: string | null;
 }
 
 export const SupplyNetworkMap: React.FC<MapProps> = ({ 
-  height = '500px',
+  height = '640px',
   userLocation,
   nearbyHospitals = [],
   selectedHospitalId,
   onHospitalSelect,
+  isLocating = false,
+  isSearching = false,
+  isLiveTracking = false,
+  searchRadius = 10,
+  onRadiusChange,
+  onRequestLocation,
+  onToggleLiveTracking,
+  locationError,
 }) => {
-  const { facilities, inventory, recommendations, approveTransfer, setSelectedFacilityId } = useMedFlow();
+  const { facilities, inventory, recommendations, setSelectedFacilityId } = useMedFlow();
   const [selectedFacility, setSelectedFacility] = useState<Facility | null>(null);
   const [activeLayer, setActiveLayer] = useState<'both' | 'regional' | 'nearby'>('both');
+  const [centerCount, setCenterCount] = useState<number>(0);
 
-  // Map center coordinates (New York / Tri-State Healthcare cluster or User Location)
+  // Map center coordinates (User Location or fallback center)
   const defaultCenter: [number, number] = userLocation
     ? [userLocation.latitude, userLocation.longitude]
     : [40.735, -73.97];
 
   const pendingRecs = recommendations.filter(r => r.status === 'pending');
 
+  const handleCenterOnMe = () => {
+    if (userLocation) {
+      setCenterCount(prev => prev + 1);
+    } else if (onRequestLocation) {
+      onRequestLocation();
+    }
+  };
+
   return (
     <div className="relative w-full rounded-2xl overflow-hidden border border-slate-800 shadow-2xl glass-panel">
-      {/* Top Map Control Bar */}
+      {/* Top Map Control & Status Bar */}
       <div className="absolute top-3 left-3 right-3 z-[1000] flex flex-wrap items-center justify-between gap-2 pointer-events-none">
-        {/* Status Legend */}
-        <div className="pointer-events-auto flex items-center gap-2 bg-slate-950/90 backdrop-blur-md px-3 py-1.5 rounded-xl border border-slate-800 text-xs shadow-lg">
-          <span className="font-semibold text-slate-200 hidden sm:inline">Facility Status:</span>
-          <div className="flex items-center gap-2.5 text-[11px]">
-            <span className="flex items-center gap-1 text-emerald-400 font-medium">
-              <span className="w-2 h-2 rounded-full bg-emerald-500"></span> Healthy
-            </span>
-            <span className="flex items-center gap-1 text-amber-400 font-medium">
-              <span className="w-2 h-2 rounded-full bg-amber-500"></span> At Risk
-            </span>
-            <span className="flex items-center gap-1 text-rose-400 font-medium">
-              <span className="w-2 h-2 rounded-full bg-rose-500 animate-ping"></span> Critical
-            </span>
+        
+        {/* Left Status Controls */}
+        <div className="pointer-events-auto flex flex-wrap items-center gap-2">
+          {/* Live Location Status Indicator */}
+          <div className="flex items-center gap-2 bg-slate-950/90 backdrop-blur-md px-3 py-1.5 rounded-xl border border-slate-800 text-xs shadow-lg">
+            {locationError ? (
+              <span className="flex items-center gap-1.5 text-rose-400 font-bold">
+                <span className="w-2 h-2 rounded-full bg-rose-500"></span> 🔴 Location Unavailable
+              </span>
+            ) : isLiveTracking ? (
+              <span className="flex items-center gap-1.5 text-emerald-400 font-bold">
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span> 🟢 Live Location Active
+              </span>
+            ) : userLocation ? (
+              <span className="flex items-center gap-1.5 text-cyan-300 font-bold">
+                <span className="w-2 h-2 rounded-full bg-cyan-400"></span> 📍 GPS Fix Acquired
+              </span>
+            ) : (
+              <span className="flex items-center gap-1.5 text-slate-400 font-medium">
+                <span className="w-2 h-2 rounded-full bg-slate-600"></span> ⚪ Live Location Off
+              </span>
+            )}
           </div>
+
+          {/* Quick "📍 Find Hospitals Near Me" / Live GPS toggle button */}
+          <button
+            onClick={() => {
+              if (!userLocation && onRequestLocation) {
+                onRequestLocation();
+              } else if (onToggleLiveTracking) {
+                onToggleLiveTracking();
+              }
+            }}
+            disabled={isLocating}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all shadow-md ${
+              isLiveTracking
+                ? 'bg-emerald-950 text-emerald-300 border border-emerald-700 hover:bg-emerald-900'
+                : 'bg-cyan-600 hover:bg-cyan-500 text-white border border-cyan-400/50'
+            }`}
+          >
+            {isLocating ? (
+              <>
+                <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                <span>Locating...</span>
+              </>
+            ) : (
+              <>
+                <Radio className={`w-3.5 h-3.5 ${isLiveTracking ? 'animate-pulse text-emerald-400' : ''}`} />
+                <span>{userLocation ? (isLiveTracking ? 'Live Tracking On' : 'Enable Live Tracking') : '📍 Find Hospitals Near Me'}</span>
+              </>
+            )}
+          </button>
+
+          {/* 🎯 Center on Me Button */}
+          {userLocation && (
+            <button
+              onClick={handleCenterOnMe}
+              className="px-3 py-1.5 rounded-xl bg-slate-950/90 hover:bg-slate-900 text-cyan-300 border border-slate-800 text-xs font-bold flex items-center gap-1.5 transition-all shadow-lg"
+              title="Center map on your location"
+            >
+              <Crosshair className="w-3.5 h-3.5 text-cyan-400" />
+              <span>🎯 Center on Me</span>
+            </button>
+          )}
         </div>
 
-        {/* Map Layers Toggle */}
-        <div className="pointer-events-auto flex items-center gap-1 bg-slate-950/90 backdrop-blur-md p-1 rounded-xl border border-slate-800 text-xs shadow-lg font-mono">
-          <span className="text-[10px] text-slate-400 px-2 flex items-center gap-1">
-            <Layers className="w-3 h-3 text-cyan-400" /> Layer:
-          </span>
-          {[
-            { id: 'both', label: 'All Markers' },
-            { id: 'regional', label: 'Regional System' },
-            { id: 'nearby', label: `Nearby (${nearbyHospitals.length})` },
-          ].map(layer => (
-            <button
-              key={layer.id}
-              onClick={() => setActiveLayer(layer.id as any)}
-              className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all ${
-                activeLayer === layer.id
-                  ? 'bg-cyan-600 text-white shadow-md'
-                  : 'text-slate-400 hover:text-white hover:bg-slate-900'
-              }`}
-            >
-              {layer.label}
-            </button>
-          ))}
+        {/* Right Controls: Search Radius & Layers */}
+        <div className="pointer-events-auto flex flex-wrap items-center gap-2">
+          {/* Radius Selector */}
+          {userLocation && onRadiusChange && (
+            <div className="flex items-center gap-1 bg-slate-950/90 backdrop-blur-md px-2.5 py-1 rounded-xl border border-slate-800 text-xs shadow-lg font-mono">
+              <span className="text-[10px] text-slate-400 hidden sm:inline">Radius:</span>
+              {[5, 10, 20].map(r => (
+                <button
+                  key={r}
+                  onClick={() => onRadiusChange(r)}
+                  className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all ${
+                    searchRadius === r
+                      ? 'bg-cyan-600 text-white shadow'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  {r} km
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Map Layers Toggle */}
+          <div className="flex items-center gap-1 bg-slate-950/90 backdrop-blur-md p-1 rounded-xl border border-slate-800 text-xs shadow-lg font-mono">
+            <span className="text-[10px] text-slate-400 px-1.5 hidden md:flex items-center gap-1">
+              <Layers className="w-3 h-3 text-cyan-400" /> Layer:
+            </span>
+            {[
+              { id: 'both', label: 'All' },
+              { id: 'regional', label: 'Regional' },
+              { id: 'nearby', label: `Nearby (${nearbyHospitals.length})` },
+            ].map(layer => (
+              <button
+                key={layer.id}
+                onClick={() => setActiveLayer(layer.id as any)}
+                className={`px-2 py-1 rounded-lg text-[10px] font-bold transition-all ${
+                  activeLayer === layer.id
+                    ? 'bg-cyan-600 text-white shadow-md'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                {layer.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Floating Dynamic Feedback Banner */}
+      <div className="absolute bottom-4 left-4 z-[1000] pointer-events-none max-w-sm">
+        <div className="pointer-events-auto bg-slate-950/95 backdrop-blur-md px-3.5 py-2 rounded-xl border border-slate-800 text-xs shadow-2xl flex items-center gap-2 font-mono">
+          {isLocating ? (
+            <span className="flex items-center gap-2 text-cyan-300 font-semibold animate-pulse">
+              <RefreshCw className="w-4 h-4 animate-spin text-cyan-400" />
+              📍 Getting your location...
+            </span>
+          ) : isSearching ? (
+            <span className="flex items-center gap-2 text-cyan-300 font-semibold animate-pulse">
+              <RefreshCw className="w-4 h-4 animate-spin text-cyan-400" />
+              🏥 Finding nearby hospitals...
+            </span>
+          ) : nearbyHospitals.length > 0 ? (
+            <span className="flex items-center gap-2 text-emerald-400 font-semibold">
+              <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+              ✓ {nearbyHospitals.length} hospitals found nearby ({searchRadius} km)
+            </span>
+          ) : userLocation ? (
+            <div className="flex flex-col gap-1 text-amber-300">
+              <span>No hospitals found within {searchRadius} km.</span>
+              {onRadiusChange && (
+                <button
+                  onClick={() => onRadiusChange(searchRadius === 5 ? 10 : searchRadius === 10 ? 20 : 50)}
+                  className="text-[10px] text-cyan-300 hover:underline font-bold text-left"
+                >
+                  [Expand Search Radius to {searchRadius === 5 ? '10' : searchRadius === 10 ? '20' : '50'} km]
+                </button>
+              )}
+            </div>
+          ) : (
+            <span className="text-slate-400">
+              Click <strong>📍 Find Hospitals Near Me</strong> to search nearby facilities via real GPS.
+            </span>
+          )}
         </div>
       </div>
 
       <MapContainer
         center={defaultCenter}
-        zoom={11}
+        zoom={12}
         scrollWheelZoom={true}
         style={{ height, width: '100%' }}
       >
@@ -132,7 +272,11 @@ export const SupplyNetworkMap: React.FC<MapProps> = ({
 
         {/* 1. User Location Marker & Accuracy Circle */}
         {userLocation && (
-          <UserLocationMarker userLocation={userLocation} autoCenter={true} />
+          <UserLocationMarker
+            userLocation={userLocation}
+            autoCenterOnce={true}
+            centerCount={centerCount}
+          />
         )}
 
         {/* 2. Discovered Nearby Hospitals Markers */}
@@ -187,7 +331,6 @@ export const SupplyNetworkMap: React.FC<MapProps> = ({
                       </span>
                     </div>
 
-                    {/* Stock metrics summary */}
                     <div className="space-y-1.5 text-xs mb-3">
                       <div className="flex justify-between text-slate-300">
                         <span>Monitored Medicines:</span>
@@ -266,3 +409,4 @@ export const SupplyNetworkMap: React.FC<MapProps> = ({
     </div>
   );
 };
+

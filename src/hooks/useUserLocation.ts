@@ -2,17 +2,33 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { UserLocation, GeolocationState } from '../types/nearbyHospital';
 import { calculateHaversineDistance } from '../services/nearbyHospitalsService';
 
-export function useUserLocation() {
-  const [geoState, setGeoState] = useState<GeolocationState>({
+export interface ExtendedGeolocationState extends GeolocationState {
+  movementThresholdMeters: number;
+  lastSearchedLocation: UserLocation | null;
+  needsHospitalRefresh: boolean;
+}
+
+export function useUserLocation(initialThresholdMeters: number = 250) {
+  const [geoState, setGeoState] = useState<ExtendedGeolocationState>({
     userLocation: null,
     locationPermission: 'prompt',
     isLocating: false,
     isLiveTracking: false,
     error: null,
+    movementThresholdMeters: initialThresholdMeters,
+    lastSearchedLocation: null,
+    needsHospitalRefresh: false,
   });
 
   const watchIdRef = useRef<number | null>(null);
   const lastPositionRef = useRef<UserLocation | null>(null);
+  const lastSearchedRef = useRef<UserLocation | null>(null);
+  const thresholdRef = useRef<number>(initialThresholdMeters);
+
+  // Keep thresholdRef in sync with state
+  useEffect(() => {
+    thresholdRef.current = geoState.movementThresholdMeters;
+  }, [geoState.movementThresholdMeters]);
 
   // Check initial permission status if available in browser
   useEffect(() => {
@@ -103,14 +119,18 @@ export function useUserLocation() {
         };
 
         lastPositionRef.current = newLocation;
+        lastSearchedRef.current = newLocation;
 
-        setGeoState({
+        setGeoState(prev => ({
+          ...prev,
           userLocation: newLocation,
+          lastSearchedLocation: newLocation,
+          needsHospitalRefresh: true,
           locationPermission: 'granted',
           isLocating: false,
           isLiveTracking: false,
           error: null,
-        });
+        }));
       },
       err => handleGeolocationError(err),
       options
@@ -129,11 +149,10 @@ export function useUserLocation() {
     }));
   }, []);
 
-  // Start watching live position with movement threshold check (> 30 meters)
+  // Start watching live position with configurable movement threshold check for hospital refresh
   const startLiveTracking = useCallback(() => {
     if (!navigator.geolocation) return;
 
-    // Clear any existing watcher first
     if (watchIdRef.current !== null) {
       navigator.geolocation.clearWatch(watchIdRef.current);
     }
@@ -159,19 +178,24 @@ export function useUserLocation() {
           timestamp: position.timestamp,
         };
 
-        // Only update if moved > 30 meters or first fix to prevent jitter
-        const lastLoc = lastPositionRef.current;
-        if (lastLoc) {
-          const distanceMoved = calculateHaversineDistance(
-            lastLoc.latitude,
-            lastLoc.longitude,
+        // Calculate distance moved from last searched location
+        let shouldRefreshHospitals = false;
+        const lastSearched = lastSearchedRef.current;
+
+        if (!lastSearched) {
+          shouldRefreshHospitals = true;
+          lastSearchedRef.current = newLocation;
+        } else {
+          const distanceMovedFromSearch = calculateHaversineDistance(
+            lastSearched.latitude,
+            lastSearched.longitude,
             newLocation.latitude,
             newLocation.longitude
           );
 
-          if (distanceMoved < 30) {
-            // Minor jitter, skip update to save recalculation work
-            return;
+          if (distanceMovedFromSearch >= thresholdRef.current) {
+            shouldRefreshHospitals = true;
+            lastSearchedRef.current = newLocation;
           }
         }
 
@@ -180,6 +204,8 @@ export function useUserLocation() {
         setGeoState(prev => ({
           ...prev,
           userLocation: newLocation,
+          lastSearchedLocation: lastSearchedRef.current,
+          needsHospitalRefresh: shouldRefreshHospitals ? true : prev.needsHospitalRefresh,
           locationPermission: 'granted',
           isLocating: false,
           error: null,
@@ -191,6 +217,20 @@ export function useUserLocation() {
 
     watchIdRef.current = watchId;
   }, [handleGeolocationError]);
+
+  const setMovementThreshold = useCallback((thresholdMeters: number) => {
+    setGeoState(prev => ({
+      ...prev,
+      movementThresholdMeters: thresholdMeters,
+    }));
+  }, []);
+
+  const acknowledgeHospitalRefresh = useCallback(() => {
+    setGeoState(prev => ({
+      ...prev,
+      needsHospitalRefresh: false,
+    }));
+  }, []);
 
   // Clean up watcher on component unmount
   useEffect(() => {
@@ -206,5 +246,8 @@ export function useUserLocation() {
     requestLocation,
     startLiveTracking,
     stopLiveTracking,
+    setMovementThreshold,
+    acknowledgeHospitalRefresh,
   };
 }
+

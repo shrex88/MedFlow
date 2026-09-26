@@ -2,7 +2,8 @@ import React, { useState } from 'react';
 import { SupplyNetworkMap } from '../components/map/SupplyNetworkMap';
 import { FindHospitalsPanel } from '../components/map/FindHospitalsPanel';
 import { useMedFlow } from '../context/MedFlowContext';
-import { NearbyHospital, UserLocation } from '../types/nearbyHospital';
+import { NearbyHospital } from '../types/nearbyHospital';
+import { useUserLocation } from '../hooks/useUserLocation';
 import { 
   Building2, 
   Map, 
@@ -14,22 +15,60 @@ import {
   X,
   Compass,
   Navigation,
-  Layers
+  Layers,
+  Radio
 } from 'lucide-react';
 
 export const RegionalMapPage: React.FC = () => {
   const { facilities, inventory, recommendations, selectedFacilityId, setSelectedFacilityId } = useMedFlow();
 
   const [sidebarTab, setSidebarTab] = useState<'find' | 'network'>('find');
-  const [currentUserLocation, setCurrentUserLocation] = useState<UserLocation | null>(null);
+  const [searchRadius, setSearchRadius] = useState<number>(10);
+  const [movementThreshold, setMovementThreshold] = useState<number>(250);
   const [nearbyHospitals, setNearbyHospitals] = useState<NearbyHospital[]>([]);
   const [selectedHospitalId, setSelectedHospitalId] = useState<string | null>(null);
+
+  const {
+    userLocation,
+    isLocating,
+    isLiveTracking,
+    error,
+    requestLocation,
+    startLiveTracking,
+    stopLiveTracking,
+    setMovementThreshold: setHookThreshold,
+  } = useUserLocation(movementThreshold);
 
   const selectedFacility = facilities.find(f => f.id === selectedFacilityId);
   const selectedInv = selectedFacility ? inventory.filter(i => i.facilityId === selectedFacility.id) : [];
   const pendingRecs = recommendations.filter(r => r.status === 'pending');
 
-  const selectedNearbyHospital = nearbyHospitals.find(h => h.id === selectedHospitalId);
+  const handleRadiusChange = (radius: number) => {
+    setSearchRadius(radius);
+  };
+
+  const handleThresholdChange = (threshold: number) => {
+    setMovementThreshold(threshold);
+    setHookThreshold(threshold);
+  };
+
+  const handleToggleLiveTracking = () => {
+    if (isLiveTracking) {
+      stopLiveTracking();
+    } else if (userLocation) {
+      startLiveTracking();
+    } else {
+      requestLocation();
+      startLiveTracking();
+    }
+  };
+
+  const handleFindHospitalsClick = () => {
+    setSidebarTab('find');
+    if (!userLocation) {
+      requestLocation();
+    }
+  };
 
   return (
     <div className="space-y-4 pb-8">
@@ -38,19 +77,19 @@ export const RegionalMapPage: React.FC = () => {
         <div>
           <h2 className="text-xl font-extrabold text-white tracking-tight flex items-center gap-2">
             <Map className="w-6 h-6 text-cyan-400" />
-            Geospatial Supply & Hospital Finder Map
+            Live Geospatial Healthcare & Hospital Proximity Map
           </h2>
           <p className="text-xs text-slate-400">
-            Real-time geospatial tracking of regional healthcare facilities, active inventory transfers, and live user-location hospital discovery.
+            Real-time GPS device tracking of live user location, nearby emergency hospitals, and regional healthcare supply transfers directly on Leaflet.
           </p>
         </div>
 
         <div className="flex items-center gap-2">
           {/* Main "Find Hospitals Near Me" Quick Button */}
           <button
-            onClick={() => setSidebarTab('find')}
+            onClick={handleFindHospitalsClick}
             className={`px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all shadow-md ${
-              sidebarTab === 'find'
+              sidebarTab === 'find' && userLocation
                 ? 'bg-gradient-to-r from-cyan-600 to-blue-600 text-white shadow-cyan-950/60 ring-2 ring-cyan-400/50'
                 : 'bg-slate-900 hover:bg-slate-800 text-cyan-300 border border-cyan-800/60'
             }`}
@@ -71,10 +110,17 @@ export const RegionalMapPage: React.FC = () => {
         <div className="lg:col-span-3">
           <SupplyNetworkMap
             height="640px"
-            userLocation={currentUserLocation}
+            userLocation={userLocation}
             nearbyHospitals={nearbyHospitals}
             selectedHospitalId={selectedHospitalId}
             onHospitalSelect={hosp => setSelectedHospitalId(hosp.id)}
+            isLocating={isLocating}
+            isLiveTracking={isLiveTracking}
+            searchRadius={searchRadius}
+            onRadiusChange={handleRadiusChange}
+            onRequestLocation={requestLocation}
+            onToggleLiveTracking={handleToggleLiveTracking}
+            locationError={error}
           />
         </div>
 
@@ -110,11 +156,18 @@ export const RegionalMapPage: React.FC = () => {
           {/* TAB 1: Find Hospitals Panel */}
           {sidebarTab === 'find' && (
             <FindHospitalsPanel
+              userLocation={userLocation}
+              isLocating={isLocating}
+              isLiveTracking={isLiveTracking}
+              error={error}
+              onRequestLocation={requestLocation}
+              onToggleLiveTracking={handleToggleLiveTracking}
+              searchRadius={searchRadius}
+              onRadiusChange={handleRadiusChange}
+              movementThreshold={movementThreshold}
+              onMovementThresholdChange={handleThresholdChange}
               onHospitalsLoaded={hospitals => {
                 setNearbyHospitals(hospitals);
-                if (hospitals.length > 0 && hospitals[0].googleMapsUrl) {
-                  // User location updated
-                }
               }}
               onHospitalSelect={hospital => {
                 setSelectedHospitalId(hospital.id);
@@ -222,3 +275,4 @@ export const RegionalMapPage: React.FC = () => {
     </div>
   );
 };
+

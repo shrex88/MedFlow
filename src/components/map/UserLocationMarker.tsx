@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { Marker, Popup, Circle, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import { UserLocation } from '../../types/nearbyHospital';
@@ -30,23 +30,40 @@ const createUserLocationIcon = () => {
 
 interface UserLocationMarkerProps {
   userLocation: UserLocation;
-  autoCenter?: boolean;
+  autoCenterOnce?: boolean;
+  centerCount?: number;
 }
 
 export const UserLocationMarker: React.FC<UserLocationMarkerProps> = ({
   userLocation,
-  autoCenter = true,
+  autoCenterOnce = true,
+  centerCount = 0,
 }) => {
   const map = useMap();
+  const initialCenteredRef = useRef<boolean>(false);
+  const prevCenterCountRef = useRef<number>(centerCount);
 
+  // Center on initial location acquisition
   useEffect(() => {
-    if (autoCenter && userLocation) {
+    if (autoCenterOnce && userLocation && !initialCenteredRef.current) {
+      initialCenteredRef.current = true;
       map.flyTo([userLocation.latitude, userLocation.longitude], 13, {
         animate: true,
-        duration: 1.5,
+        duration: 1.2,
       });
     }
-  }, [userLocation.latitude, userLocation.longitude, autoCenter, map]);
+  }, [userLocation, autoCenterOnce, map]);
+
+  // Center explicitly when user clicks "Center on Me"
+  useEffect(() => {
+    if (centerCount > prevCenterCountRef.current && userLocation) {
+      prevCenterCountRef.current = centerCount;
+      map.flyTo([userLocation.latitude, userLocation.longitude], 14, {
+        animate: true,
+        duration: 1.0,
+      });
+    }
+  }, [centerCount, userLocation, map]);
 
   return (
     <>
@@ -86,7 +103,7 @@ export const UserLocationMarker: React.FC<UserLocationMarkerProps> = ({
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-400">GPS Accuracy:</span>
-                <span className="text-cyan-400 font-semibold">{userLocation.accuracy} meters</span>
+                <span className="text-cyan-400 font-semibold">± {userLocation.accuracy} meters</span>
               </div>
               <div className="text-[10px] text-slate-500 pt-1 border-t border-slate-800 text-right">
                 Updated: {new Date(userLocation.timestamp).toLocaleTimeString()}
@@ -98,3 +115,4 @@ export const UserLocationMarker: React.FC<UserLocationMarkerProps> = ({
     </>
   );
 };
+

@@ -1,5 +1,5 @@
-import React from 'react';
-import { Marker, Popup } from 'react-leaflet';
+import React, { useEffect, useRef } from 'react';
+import { Marker, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import { 
   Building2, 
@@ -12,26 +12,29 @@ import {
 import { NearbyHospital } from '../../types/nearbyHospital';
 
 // Create custom hospital icon for nearby discovered hospitals
-const createNearbyHospitalIcon = (type: NearbyHospital['type']) => {
+const createNearbyHospitalIcon = (type: NearbyHospital['type'], isSelected?: boolean) => {
   const color = type === 'Clinic' ? '#06b6d4' : type === 'Emergency Hospital' ? '#f43f5e' : '#10b981';
+  const size = isSelected ? 42 : 34;
+  const height = isSelected ? 52 : 44;
+  const borderStroke = isSelected ? '#38bdf8' : color;
 
   const svgString = `
-    <svg xmlns="http://www.w3.org/2000/svg" width="34" height="44" viewBox="0 0 34 44">
+    <svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${height}" viewBox="0 0 34 44">
       <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
         <feDropShadow dx="0" dy="3" stdDeviation="3" flood-color="#000000" flood-opacity="0.6"/>
       </filter>
-      <path d="M17 0C7.611 0 0 7.611 0 17c0 12.75 17 27 17 27s17-14.25 17-27C34 7.611 26.389 0 17 0z" fill="${color}" filter="url(#shadow)"/>
+      <path d="M17 0C7.611 0 0 7.611 0 17c0 12.75 17 27 17 27s17-14.25 17-27C34 7.611 26.389 0 17 0z" fill="${color}" stroke="${borderStroke}" stroke-width="${isSelected ? 2 : 0}" filter="url(#shadow)"/>
       <circle cx="17" cy="17" r="11" fill="#0f172a"/>
       <path d="M17 9.5v15M9.5 17h15" stroke="${color}" stroke-width="3" stroke-linecap="round"/>
     </svg>
   `;
 
   return L.divIcon({
-    className: 'custom-nearby-hospital-pin',
+    className: `custom-nearby-hospital-pin ${isSelected ? 'marker-selected' : ''}`,
     html: svgString,
-    iconSize: [34, 44],
-    iconAnchor: [17, 44],
-    popupAnchor: [0, -40],
+    iconSize: [size, height],
+    iconAnchor: [size / 2, height],
+    popupAnchor: [0, -height + 4],
   });
 };
 
@@ -43,12 +46,27 @@ interface NearbyHospitalMarkerProps {
 
 export const NearbyHospitalMarker: React.FC<NearbyHospitalMarkerProps> = ({
   hospital,
+  isSelected,
   onSelect,
 }) => {
+  const markerRef = useRef<L.Marker | null>(null);
+  const map = useMap();
+
+  useEffect(() => {
+    if (isSelected && markerRef.current) {
+      markerRef.current.openPopup();
+      map.flyTo([hospital.lat, hospital.lng], Math.max(map.getZoom(), 14), {
+        animate: true,
+        duration: 0.8,
+      });
+    }
+  }, [isSelected, hospital.lat, hospital.lng, map]);
+
   return (
     <Marker
+      ref={markerRef}
       position={[hospital.lat, hospital.lng]}
-      icon={createNearbyHospitalIcon(hospital.type)}
+      icon={createNearbyHospitalIcon(hospital.type, isSelected)}
       eventHandlers={{
         click: () => onSelect?.(hospital),
       }}
@@ -121,3 +139,4 @@ export const NearbyHospitalMarker: React.FC<NearbyHospitalMarkerProps> = ({
     </Marker>
   );
 };
+
