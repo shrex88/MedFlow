@@ -90,10 +90,19 @@ export const Header: React.FC = () => {
         {/* Project Presentation Pitch Deck Button */}
         <button
           onClick={() => setActivePage('presentation')}
-          className="flex items-center gap-2 px-3.5 py-1.5 rounded-lg bg-slate-900 border border-cyan-500/40 hover:bg-cyan-950/50 text-cyan-300 text-xs font-semibold shadow-sm transition-all"
+          className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-900 border border-cyan-500/40 hover:bg-cyan-950/50 text-cyan-300 text-xs font-semibold shadow-sm transition-all"
         >
           <Presentation className="w-3.5 h-3.5 text-cyan-400" />
-          <span>Project Presentation</span>
+          <span>Presentation</span>
+        </button>
+
+        {/* Find Hospitals Near Me Header Action */}
+        <button
+          onClick={() => setActivePage('map')}
+          className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-cyan-950/80 border border-cyan-700/80 hover:bg-cyan-900/80 text-cyan-200 text-xs font-semibold shadow-sm transition-all"
+        >
+          <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse"></span>
+          <span>📍 Find Nearby Hospitals</span>
         </button>
       </div>
 

@@ -86,6 +86,29 @@ app.get('/api/alerts', (req, res) => {
   res.json(alerts);
 });
 
+app.get('/api/nearby-hospitals', async (req, res) => {
+  const { lat, lng, radius = 10000 } = req.query;
+  const apiKey = process.env.GOOGLE_PLACES_API_KEY;
+
+  if (!lat || !lng) {
+    return res.status(400).json({ error: 'lat and lng query parameters are required' });
+  }
+
+  if (!apiKey) {
+    return res.json([]);
+  }
+
+  try {
+    const url = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${lat},${lng}&radius=${radius}&type=hospital&key=${apiKey}`;
+    const fetchRes = await fetch(url);
+    const data = await fetchRes.json();
+    return res.json(data.results || []);
+  } catch (error) {
+    console.error('Failed to proxy Google Places request:', error);
+    return res.status(500).json({ error: 'Failed to fetch nearby hospitals from Places API' });
+  }
+});
+
 app.post('/api/transfers/approve', (req, res) => {
   const { transferId } = req.body;
   const recIndex = recommendations.findIndex(r => r.id === transferId);
